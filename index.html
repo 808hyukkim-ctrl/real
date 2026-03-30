@@ -915,6 +915,10 @@ function startDBSync(){
     db.ref('/'+key).on('value',snap=>{
       const data=snap.val();
       _cache[key]=data?Object.values(data):[];
+      // 매물 데이터 변경 시 지도/필터 갱신
+      if(key===SK.props && window.CU){
+        applyF();
+      }
     });
   });
 }
@@ -977,7 +981,11 @@ function loginWithUser(u){
   document.getElementById('navSuper').style.display=(u.role==='super')?'':'none';
   document.getElementById('mnAgent').style.display=(['agent'].includes(u.role))?'':'none';
   document.getElementById('mnSuper').style.display=(u.role==='super')?'':'none';
-  initMap();
+  // 최신 DB 데이터 다시 로드 후 지도 초기화
+  loadAllFromDB(function(){
+    startDBSync();
+    initMap();
+  });
 }
 // 페이지 로드 시 자동 로그인
 // ── 앱 시작: DB 로드 후 초기화 ──
