@@ -372,6 +372,27 @@ img{display:block;max-width:100%}
 .toast{position:fixed;bottom:76px;left:50%;transform:translateX(-50%) translateY(14px);opacity:0;background:var(--navy);color:#fff;border-radius:10px;padding:11px 20px;font-size:13px;font-weight:500;z-index:999;transition:all .3s;pointer-events:none;white-space:nowrap;box-shadow:var(--sh2)}
 .toast.show{transform:translateX(-50%) translateY(0);opacity:1}
 @media(max-width:600px){.toast{bottom:68px;font-size:12px}}
+
+/* ── MY PROPS MODAL ── */
+.myprop-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:400;display:none;align-items:flex-end;justify-content:center}
+.myprop-modal-bg.open{display:flex}
+@media(min-width:600px){.myprop-modal-bg.open{align-items:center}}
+.myprop-modal{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-width:640px;max-height:90svh;display:flex;flex-direction:column;overflow:hidden}
+@media(min-width:600px){.myprop-modal{border-radius:20px;max-height:85svh}}
+.myprop-modal-hd{padding:14px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.myprop-modal-title{font-size:16px;font-weight:800}
+.myprop-modal-close{width:30px;height:30px;border-radius:8px;background:var(--bg);border:none;cursor:pointer;font-size:16px}
+.myprop-modal-body{flex:1;overflow-y:auto;padding:12px}
+.edit-modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:500;display:none;align-items:flex-end;justify-content:center}
+.edit-modal-bg.open{display:flex}
+@media(min-width:600px){.edit-modal-bg.open{align-items:center}}
+.edit-modal{background:var(--white);border-radius:20px 20px 0 0;width:100%;max-width:600px;max-height:92svh;display:flex;flex-direction:column;overflow:hidden}
+@media(min-width:600px){.edit-modal{border-radius:20px;max-height:88svh}}
+.edit-modal-hd{padding:14px 18px;border-bottom:1px solid var(--bdr);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.edit-modal-title{font-size:16px;font-weight:800}
+.edit-modal-close{width:30px;height:30px;border-radius:8px;background:var(--bg);border:none;cursor:pointer;font-size:16px}
+.edit-modal-body{flex:1;overflow-y:auto;padding:16px}
+.edit-modal-foot{padding:14px 18px;border-top:1px solid var(--bdr);flex-shrink:0}
 </style>
 </head>
 <body>
@@ -750,6 +771,7 @@ img{display:block;max-width:100%}
         <div class="m-tags" id="mTags"></div>
         <div class="m-st">매물 설명</div>
         <div class="m-desc" id="mDesc"></div>
+        <button id="mSourceUrl" onclick="" style="display:none;margin-top:10px;width:100%;padding:11px;background:#f1f5f9;border:1.5px solid var(--bdr);border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;color:var(--t2)">🔗 원본 매물 링크 보기</button>
         <div style="height:1px;background:var(--bdr);margin:14px 0"></div>
         <div class="m-st">담당 중개사</div>
         <div class="m-agent-card" id="mAgentCard">
@@ -765,6 +787,27 @@ img{display:block;max-width:100%}
   </div>
 </div>
 
+<!-- MY PROPS MODAL -->
+<div class="myprop-modal-bg" id="myPropModalBg" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="myprop-modal">
+    <div class="myprop-modal-hd">
+      <div class="myprop-modal-title">📋 내 매물 <span id="myPropModalCnt" style="color:var(--blue)">0</span>개</div>
+      <button class="myprop-modal-close" onclick="document.getElementById('myPropModalBg').classList.remove('open')">✕</button>
+    </div>
+    <div class="myprop-modal-body" id="myPropModalList"></div>
+  </div>
+</div>
+<!-- EDIT PROP MODAL -->
+<div class="edit-modal-bg" id="editModalBg" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="edit-modal">
+    <div class="edit-modal-hd">
+      <div class="edit-modal-title">✏️ 매물 수정</div>
+      <button class="edit-modal-close" onclick="document.getElementById('editModalBg').classList.remove('open')">✕</button>
+    </div>
+    <div class="edit-modal-body" id="editModalBody"></div>
+    <div class="edit-modal-foot"><button class="btn-ap" onclick="saveEditProp()">✅ 수정 저장</button></div>
+  </div>
+</div>
 <!-- KAKAO SEND PANEL -->
 <div class="kako-panel-bg" id="kakoBg" onclick="closeKako()"></div>
 <div class="kako-panel" id="kakoPanel">
@@ -857,6 +900,10 @@ function doLogin(){
   const users=getStore(SK.users);
   const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
   if(!u){toast('❌ 아이디 또는 비밀번호 오류');return;}
+  localStorage.setItem('mj_session',JSON.stringify({id:u.id,pw:u.pw}));
+  loginWithUser(u);
+}
+function loginWithUser(u){
   CU=u;
   document.getElementById('authScreen').style.display='none';
   document.getElementById('app').style.display='flex';
@@ -865,13 +912,23 @@ function doLogin(){
   av.className='tb-av '+(u.role==='super'?'super':u.role==='agent'?'agent':'client');
   document.getElementById('tbNm').textContent=u.displayName||u.name;
   document.getElementById('tbRole').textContent=u.role==='super'?'슈퍼관리자':u.role==='agent'?'담당중개사':'손님';
-  // show correct nav buttons
   document.getElementById('navAgent').style.display=(['agent'].includes(u.role))?'':'none';
   document.getElementById('navSuper').style.display=(u.role==='super')?'':'none';
   document.getElementById('mnAgent').style.display=(['agent'].includes(u.role))?'':'none';
   document.getElementById('mnSuper').style.display=(u.role==='super')?'':'none';
   initMap();
 }
+// 페이지 로드 시 자동 로그인
+(function autoLogin(){
+  const sess=localStorage.getItem('mj_session');
+  if(!sess) return;
+  try{
+    const {id,pw}=JSON.parse(sess);
+    const users=getStore(SK.users);
+    const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
+    if(u) loginWithUser(u);
+  }catch(e){localStorage.removeItem('mj_session');}
+})();
 function doReg(){
   const id=document.getElementById('rid').value.trim();
   const pw=document.getElementById('rpw').value.trim();
@@ -887,7 +944,9 @@ function doReg(){
   atab('login');
 }
 function doLogout(){
-  CU=null;cart=[];overlays.forEach(o=>o.setMap&&o.setMap(null));overlays=[];kmap=null;rvClient=null;
+  CU=null;cart=[];
+  localStorage.removeItem('mj_session');
+  overlays.forEach(o=>o.setMap&&o.setMap(null));overlays=[];kmap=null;rvClient=null;
   document.getElementById('app').style.display='none';
   document.getElementById('authScreen').style.display='flex';
   updateBadge();
@@ -1195,6 +1254,12 @@ function openDetail(id){
   if(p.move)tags.push('✅ 즉시입주');
   document.getElementById('mTags').innerHTML=tags.map(t=>`<span class="m-tag">${t}</span>`).join('');
   document.getElementById('mDesc').textContent=p.desc||'상세 정보 없음';
+  // 원본 링크 버튼
+  const srcEl=document.getElementById('mSourceUrl');
+  if(srcEl){
+    if(p.sourceUrl){srcEl.style.display='block';srcEl.onclick=()=>window.open(p.sourceUrl,'_blank');}
+    else srcEl.style.display='none';
+  }
   updMCartBtn();
   document.getElementById('mbg').classList.add('open');
   document.body.style.overflow='hidden';
@@ -1588,19 +1653,152 @@ function renderAgentView(){
   const myClients=users.filter(u=>u.role==='client'&&u.agentId===CU.id);
   const myPend=pend.filter(p=>!p.agentId||p.agentId===CU.id);
   document.getElementById('agentStats').innerHTML=`
-    <div class="adm-stat"><div class="adm-stat-l">내 매물</div><div class="adm-stat-v" style="color:var(--blue)">${myProps.length}</div></div>
-    <div class="adm-stat"><div class="adm-stat-l">내 손님</div><div class="adm-stat-v" style="color:var(--green)">${myClients.length}</div></div>
-    <div class="adm-stat"><div class="adm-stat-l">승인 대기</div><div class="adm-stat-v" style="color:var(--orange)">${myPend.length}</div></div>
-    <div class="adm-stat"><div class="adm-stat-l">오늘 조회</div><div class="adm-stat-v" style="color:var(--purple)">${vcnt}</div></div>`;
-  // 프로필 불러오기
+    <div class="adm-stat" onclick="openMyPropModal()" title="클릭하여 내 매물 보기">
+      <div class="adm-stat-l">📋 내 매물</div>
+      <div class="adm-stat-v" style="color:var(--blue)">${myProps.length}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:4px">클릭하여 보기</div>
+    </div>
+    <div class="adm-stat"><div class="adm-stat-l">👥 내 손님</div><div class="adm-stat-v" style="color:var(--green)">${myClients.length}</div></div>
+    <div class="adm-stat"><div class="adm-stat-l">⏳ 승인 대기</div><div class="adm-stat-v" style="color:var(--orange)">${myPend.length}</div></div>
+    <div class="adm-stat"><div class="adm-stat-l">👁 오늘 조회</div><div class="adm-stat-v" style="color:var(--purple)">${vcnt}</div></div>`;
   const me=users.find(u=>u.id===CU.id);
   if(me){document.getElementById('agentDisplayName').value=me.displayName||me.name;document.getElementById('agentPhone').value=me.phone||'';document.getElementById('agentKakao').value=me.kakao||'';}
-  // 내 손님
   document.getElementById('myClientTbody').innerHTML=myClients.map(c=>`<tr><td style="font-weight:700">${c.id}</td><td>${c.name}</td><td style="color:var(--t3)">${c.phone||'-'}</td><td><span class="sdot ${c.active?'on':'off'}"></span>${c.active?'활성':'비활성'}</td><td><div style="display:flex;gap:4px"><button class="btn-t" onclick="togMyClient('${c.id}')">${c.active?'비활성':'활성'}</button><button class="btn-t del" onclick="delMyClient('${c.id}')">삭제</button></div></td></tr>`).join('')||'<tr><td colspan="5" style="text-align:center;color:var(--t3);padding:16px">손님 없음</td></tr>';
-  // 내 매물
-  document.getElementById('myPropList').innerHTML=myProps.length?myProps.map(p=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bdr);gap:8px"><div style="flex:1;min-width:0"><span class="bdg ${p.deal==='전세'?'bdg-전세':p.deal==='월세'?'bdg-월세':p.deal==='단기임대'?'bdg-단기임대':'bdg-매매'}" style="font-size:9px">${p.deal}</span> <strong style="font-size:12px">${p.name}</strong><div style="font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.address}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-size:12px;font-weight:700">${fmtP(p)}</div><button class="btn-t del" style="font-size:10px;margin-top:3px" onclick="delMyProp(${p.id})">삭제</button></div></div>`).join(''):'<div style="color:var(--t3)">등록된 매물 없음</div>';
-  // 대기
+  // 내 매물 현황 - 클릭/수정/삭제
+  document.getElementById('myPropList').innerHTML=myProps.length?myProps.map(p=>`
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--bdr);gap:8px">
+      <div style="flex:1;min-width:0;cursor:pointer" onclick="openDetail(${p.id})">
+        <span class="bdg ${p.deal==='전세'?'bdg-전세':p.deal==='월세'?'bdg-월세':p.deal==='단기임대'?'bdg-단기임대':'bdg-매매'}" style="font-size:9px">${p.deal}</span>
+        <strong style="font-size:12px;margin-left:4px">${p.name}</strong>
+        <div style="font-size:10px;color:var(--t3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.address}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <div style="font-size:12px;font-weight:700">${fmtP(p)}</div>
+        <div style="display:flex;gap:4px;margin-top:4px">
+          <button class="btn-t" style="font-size:10px" onclick="openEditProp(${p.id})">수정</button>
+          <button class="btn-t del" style="font-size:10px" onclick="delMyProp(${p.id})">삭제</button>
+        </div>
+      </div>
+    </div>`).join(''):'<div style="color:var(--t3);padding:16px 0">등록된 매물 없음</div>';
   document.getElementById('myPendingList').innerHTML=myPend.length?myPend.map(p=>`<div class="pending-item"><div><div style="font-weight:700;font-size:13px">${p.id} <span style="color:var(--t3);font-size:11px">${p.name}</span></div><div style="font-size:11px;color:var(--t3)">${p.phone||''}</div></div><div style="display:flex;gap:5px"><button class="btn-t" onclick="approveClient('${p.id}')">승인</button><button class="btn-t del" onclick="rejectClient('${p.id}')">거절</button></div></div>`).join(''):'<div style="color:var(--t3)">대기 없음</div>';
+}
+
+// 내 매물 모달
+function openMyPropModal(){
+  const myProps=getStore(SK.props).filter(p=>p.agentId===CU.id);
+  document.getElementById('myPropModalCnt').textContent=myProps.length;
+  document.getElementById('myPropModalList').innerHTML=myProps.length?myProps.map(p=>`
+    <div style="background:var(--white);border:1.5px solid var(--bdr);border-radius:10px;margin-bottom:8px;overflow:hidden">
+      <div style="display:flex;gap:10px;padding:12px;cursor:pointer" onclick="document.getElementById('myPropModalBg').classList.remove('open');sv('map');setTimeout(()=>openDetail(${p.id}),300)">
+        <div style="width:72px;height:72px;border-radius:8px;overflow:hidden;flex-shrink:0;background:#e8edf5;display:flex;align-items:center;justify-content:center;font-size:28px">
+          ${p.img?`<img src="${p.img.split(',')[0]}" style="width:100%;height:100%;object-fit:cover" onerror="this.style.display='none'">`:''}
+          ${tIc(p.type)}
+        </div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;gap:5px;margin-bottom:4px"><span class="bdg ${p.deal==='전세'?'bdg-전세':p.deal==='월세'?'bdg-월세':p.deal==='단기임대'?'bdg-단기임대':'bdg-매매'}" style="font-size:10px">${p.deal}</span><span class="bdg bdg-t" style="font-size:10px">${p.type}</span></div>
+          <div style="font-size:14px;font-weight:700;margin-bottom:2px">${fmtPF(p)}</div>
+          <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p.name}</div>
+          <div style="font-size:11px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">📍 ${p.address}</div>
+        </div>
+      </div>
+      <div style="display:flex;border-top:1px solid var(--bdr)">
+        <button onclick="openEditProp(${p.id})" style="flex:1;padding:10px;background:transparent;border:none;border-right:1px solid var(--bdr);font-size:13px;font-weight:600;color:var(--blue);cursor:pointer">✏️ 수정</button>
+        <button onclick="delMyProp(${p.id});openMyPropModal()" style="flex:1;padding:10px;background:transparent;border:none;font-size:13px;font-weight:600;color:var(--red);cursor:pointer">🗑 삭제</button>
+      </div>
+    </div>`).join(''):'<div style="text-align:center;padding:40px;color:var(--t3)">등록된 매물이 없습니다</div>';
+  document.getElementById('myPropModalBg').classList.add('open');
+}
+function closeMyPropModal(e){if(e.target===document.getElementById('myPropModalBg'))document.getElementById('myPropModalBg').classList.remove('open');}
+
+// 매물 수정 모달
+let _editPropId=null;
+function openEditProp(id){
+  const p=getStore(SK.props).find(x=>x.id===id);if(!p)return;
+  _editPropId=id;
+  const dc=p.deal||'월세';
+  document.getElementById('editModalBody').innerHTML=`
+    <div class="mreg-grid">
+      <div class="mf"><label>매물명</label><input id="ep_name" value="${p.name||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>거래유형</label><select id="ep_deal" onchange="epDealChange()" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px">
+        <option ${dc==='월세'?'selected':''}>월세</option><option ${dc==='전세'?'selected':''}>전세</option>
+        <option ${dc==='매매'?'selected':''}>매매</option><option ${dc==='단기임대'?'selected':''}>단기임대</option>
+      </select></div>
+      <div class="mf"><label>주소</label><input id="ep_addr" value="${p.address||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>방향</label><select id="ep_dir" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px">
+        ${['','남향','북향','동향','서향','남동향','남서향','북동향','북서향'].map(d=>`<option ${p.dir===d?'selected':''}>${d||'선택안함'}</option>`).join('')}
+      </select></div>
+    </div>
+    <div class="mreg-grid">
+      <div class="mf price-sec" id="ep_sec매매"><label>매매가(만원)</label><input type="number" id="ep_price" value="${p.price||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf price-sec" id="ep_sec보"><label>보증금(만원)</label><input type="number" id="ep_deposit" value="${p.deposit||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf price-sec" id="ep_sec월"><label>월세(만원)</label><input type="number" id="ep_monthly" value="${p.monthly||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>관리비(만원)</label><input type="number" id="ep_mgt" value="${p.mgt||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="mreg-grid">
+      <div class="mf"><label>면적(㎡)</label><input type="number" id="ep_area" value="${p.area||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>층수</label><input type="number" id="ep_floor" value="${p.floor||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>총층수</label><input type="number" id="ep_totalFloor" value="${p.totalFloor||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>욕실수</label><input type="number" id="ep_bath" value="${p.bath||1}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>입주가능일</label><input type="date" id="ep_moveDate" value="${p.moveDate||''}" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="mreg-grid">
+      <div class="mf"><label>위도</label><input type="number" id="ep_lat" value="${p.lat||''}" step="0.000001" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+      <div class="mf"><label>경도</label><input type="number" id="ep_lng" value="${p.lng||''}" step="0.000001" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+    </div>
+    <div class="mf"><label>사진 URL (쉼표로 여러장)</label><input id="ep_img" value="${p.img||''}" placeholder="https://..." style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px"></div>
+    <div class="mf"><label>매물 조건</label>
+      <div class="cond-row">
+        <label class="cond-item"><input type="checkbox" id="ep_parking" ${p.parking?'checked':''}> 주차가능</label>
+        <label class="cond-item"><input type="checkbox" id="ep_elev" ${p.elev?'checked':''}> 엘리베이터</label>
+        <label class="cond-item"><input type="checkbox" id="ep_move" ${p.move?'checked':''}> 즉시입주</label>
+        <label class="cond-item"><input type="checkbox" id="ep_semi" ${p.semi?'checked':''}> 반지하</label>
+      </div>
+    </div>
+    <div class="mf"><label>상세 설명</label><textarea id="ep_desc" style="width:100%;padding:9px 11px;border:1.5px solid var(--bdr);border-radius:8px;font-size:13px;resize:vertical;min-height:80px;line-height:1.5">${p.desc||''}</textarea></div>
+  `;
+  epDealChange();
+  document.getElementById('editModalBg').classList.add('open');
+}
+function epDealChange(){
+  const deal=document.getElementById('ep_deal')?.value||'월세';
+  const dim=(id,d)=>{const el=document.getElementById('ep_sec'+id);if(el){el.classList.toggle('dim',d);const inp=el.querySelector('input');if(inp)inp.disabled=d;}};
+  dim('매매',deal!=='매매');dim('보',deal==='매매');dim('월',deal==='매매'||deal==='전세');
+}
+function closeEditModal(e){if(e.target===document.getElementById('editModalBg'))document.getElementById('editModalBg').classList.remove('open');}
+function saveEditProp(){
+  if(!_editPropId)return;
+  const props=getStore(SK.props);
+  const idx=props.findIndex(p=>p.id===_editPropId);
+  if(idx<0)return;
+  const g=id=>document.getElementById('ep_'+id);
+  props[idx]={
+    ...props[idx],
+    name:g('name').value.trim()||props[idx].name,
+    deal:g('deal').value,
+    address:g('addr').value.trim()||props[idx].address,
+    dir:g('dir').value==='선택안함'?'':g('dir').value,
+    price:+g('price').value||0,
+    deposit:+g('deposit').value||0,
+    monthly:+g('monthly').value||0,
+    mgt:+g('mgt').value||0,
+    area:+g('area').value||props[idx].area,
+    floor:+g('floor').value||props[idx].floor,
+    totalFloor:+g('totalFloor').value||props[idx].totalFloor,
+    bath:+g('bath').value||1,
+    moveDate:g('moveDate').value||'',
+    lat:parseFloat(g('lat').value)||props[idx].lat,
+    lng:parseFloat(g('lng').value)||props[idx].lng,
+    img:g('img').value.trim()||'',
+    parking:g('parking').checked,
+    elev:g('elev').checked,
+    move:g('move').checked,
+    semi:g('semi').checked,
+    desc:g('desc').value.trim()||'',
+  };
+  setStore(SK.props,props);
+  document.getElementById('editModalBg').classList.remove('open');
+  renderAgentView();applyF();
+  toast('✅ 매물 수정 완료!');
 }
 function saveAgentProfile(){
   const users=getStore(SK.users);
@@ -1636,6 +1834,8 @@ function approveClient(id){
 function rejectClient(id){setStore(SK.pending,getStore(SK.pending).filter(x=>x.id!==id));renderAgentView();toast('거절 처리');}
 function delMyProp(id){const props=getStore(SK.props).filter(p=>p.id!==id);setStore(SK.props,props);renderAgentView();applyF();toast('🗑 삭제');}
 function clearMyProps(){if(!confirm('내 매물 전체 삭제?'))return;const props=getStore(SK.props).filter(p=>p.agentId!==CU.id);setStore(SK.props,props);renderAgentView();applyF();toast('🗑 전체삭제');}
+
+
 
 // ━━━ SUPER ADMIN ━━━
 function renderSuperView(){
@@ -1691,36 +1891,275 @@ function superApprove(id){
 function superReject(id){setStore(SK.pending,getStore(SK.pending).filter(x=>x.id!==id));renderSuperView();}
 
 // ━━━ EXCEL ━━━
-const COLS={name:['매물명','name','단지명'],deal:['거래유형','거래'],type:['매물유형','유형'],room:['룸타입','방구조'],price:['가격(만원)','가격','매매가'],deposit:['보증금(만원)','보증금'],monthly:['월세(만원)','월세','임대료'],mgt:['관리비(만원)','관리비'],area:['면적(㎡)','면적','전용면적'],floor:['층','floor'],totalFloor:['총층'],bath:['욕실수','욕실'],semi:['반지하여부','반지하'],address:['주소','address'],lat:['위도','lat'],lng:['경도','lng'],dir:['방향'],parking:['주차'],elev:['엘리베이터','elev'],move:['즉시입주'],moveDate:['입주가능일','입주일','moveDate'],desc:['설명','비고'],img:['사진URL','img','사진']};
-function fc(row,keys){const k=Object.keys(row);for(const c of keys){const f=k.find(x=>x.trim()===c||x.trim().includes(c));if(f!==undefined)return row[f];}return '';}
-function pn(v){if(v===''||v==null)return 0;const x=parseFloat(String(v).replace(/,/g,''));return isNaN(x)?0:x;}
-function pb(v){return v==='Y'||v===true||v===1||String(v).includes('가능')||String(v).includes('O')||String(v).includes('있')||String(v).includes('반지하');}
-function handleDrop(e){e.preventDefault();e.currentTarget.classList.remove('drag');const f=e.dataTransfer.files[0];if(f)procFile(f);}
+// ━━━ EXCEL IMPORT — 다중 양식 자동 감지 ━━━
+
+// ── 공통 유틸 ──
+function extractHyperlink(v){
+  if(!v)return'';const s=String(v);
+  const m=s.match(/HYPERLINK\s*\([^,]+,\s*"([^"]+)"\)/i);
+  return m?m[1]:s;
+}
+function parseLatLng(v){
+  const s=extractHyperlink(v);
+  const m=s.match(/([\d.]+)\s*,\s*([\d.]+)/);
+  return m?{lat:parseFloat(m[1]),lng:parseFloat(m[2])}:{lat:null,lng:null};
+}
+function extractAddr(v){return extractHyperlink(String(v||'')).trim();}
+function parseFloor(v){
+  if(!v)return{floor:1,total:1};
+  const s=String(v).replace(/층/g,'').trim();
+  const m=s.match(/(-?\d+)\s*[\/\-]\s*(\d+)/);
+  if(m)return{floor:parseInt(m[1]),total:parseInt(m[2])};
+  const n=parseInt(s);return{floor:isNaN(n)?1:n,total:isNaN(n)?1:n};
+}
+function parseAreaStr(v){
+  // "45㎡ · 13.6평" 또는 "84.9" 형태
+  if(!v)return 0;
+  const s=String(v);
+  const m=s.match(/([\d.]+)\s*㎡/);
+  if(m)return parseFloat(m[1]);
+  const parts=s.split('/');
+  if(parts.length>=2){const n=parseFloat(parts[1]);if(!isNaN(n))return n;}
+  const n=parseFloat(s);return isNaN(n)?0:n;
+}
+function parseMgt(v){
+  // "5만원" → 5
+  if(!v)return 0;
+  const s=String(v).replace(/,/g,'');
+  const m=s.match(/([\d.]+)\s*만/);
+  if(m)return parseFloat(m[1]);
+  const n=parseFloat(s);return isNaN(n)?0:n;
+}
+function parseBath(v){
+  // "방 2개 / 욕실 1개" → bath:1
+  if(!v)return 1;
+  const s=String(v);
+  const m=s.match(/욕실\s*(\d+)/);
+  return m?parseInt(m[1]):1;
+}
+function parseRoomN(v){
+  // "방 2개 / 욕실 1개" → 2
+  if(!v)return 1;
+  const s=String(v);
+  const m=s.match(/방\s*(\d+)/);
+  return m?parseInt(m[1]):1;
+}
+function roomFromN(n){const r=parseInt(n)||1;if(r>=4)return'포룸+';if(r===3)return'쓰리룸';if(r===2)return'투룸';return'원룸';}
+function normPrice(v){
+  const n=pn(v);if(n===0)return 0;
+  return n>=1000000?Math.round(n/10000):n;
+}
+function pn(v){if(v===''||v==null)return 0;const x=parseFloat(String(v).replace(/,/g,'').replace(/억/g,'').replace(/만/g,''));return isNaN(x)?0:x;}
+function pb(v){return v==='Y'||v===true||v===1||String(v).includes('가능')||String(v).includes('O')||String(v).includes('있');}
+function nD(s){if(!s)return'월세';s=String(s);if(s.includes('매매'))return'매매';if(s.includes('전세'))return'전세';if(s.includes('단기'))return'단기임대';if(s.includes('월세')||s.includes('임대'))return'월세';return'월세';}
+function nT(s){if(!s)return'단독/빌라';s=String(s);if(s.includes('아파트')||s.includes('APT'))return'아파트';if(s.includes('오피스텔')||s.includes('OFFICETEL'))return'오피스텔';if(s.includes('빌라')||s.includes('단독')||s.includes('다가구')||s.includes('다세대')||s.includes('VILLA'))return'단독/빌라';if(s.includes('상가')||s.includes('사무')||s.includes('COMMERCIAL'))return'상가/사무실';return'단독/빌라';}
+function nR(s){if(!s)return'원룸';s=String(s);if(s.includes('포룸')||s.includes('4룸')||s.includes('FOUR'))return'포룸+';if(s.includes('쓰리룸')||s.includes('3룸')||s.includes('THREE'))return'쓰리룸';if(s.includes('투룸')||s.includes('2룸')||s.includes('TWO'))return'투룸';if(s.includes('원룸')||s.includes('1룸')||s.includes('ONE')||s.includes('STUDIO'))return'원룸';return'원룸';}
+function detectParking(s){return!!(s&&(s.includes('주차가능')||s.includes('주차 가능')));}
+function gc(r,candidates){
+  const keys=Object.keys(r);
+  for(const c of candidates){
+    const f=keys.find(k=>k.trim()===c||k.trim().includes(c));
+    if(f!==undefined&&r[f]!==''&&r[f]!=null)return r[f];
+  }return '';
+}
+
+// ── 양식 자동 감지 ──
+function detectFormat(headers){
+  const h=headers.map(x=>String(x||'').trim());
+  const has=(...keys)=>keys.some(k=>h.some(x=>x.includes(k)));
+  if(has('매물_URL','월세_텍스트','판매여부'))return'daangn';
+  if(has('위도/경도','중개사명','집주인/확인'))return'naver';
+  return'generic';
+}
+
+// ── 당근 가격 파싱 ──
+function parseDaangnPrice(title,monthlyText){
+  // 제목: "투룸이상 2억/30만원" 또는 "2,000만원/95만원"
+  // monthlyText: "월세 2억", "전세 3억"
+  let deal='월세',price=0,deposit=0,monthly=0;
+  const t=String(title||'');
+  const mt=String(monthlyText||'');
+
+  if(mt.includes('전세')||t.includes('전세')){deal='전세';}
+  else if(mt.includes('매매')||t.includes('매매')){deal='매매';}
+  else{deal='월세';}
+
+  // 제목에서 보증금/월세 추출 "2억/30만원" or "2,000만원/95만원"
+  const m1=t.match(/([\d,]+)억(?:\s*\/\s*([\d,]+)만원?)?/);
+  const m2=t.match(/([\d,]+)만원?\s*\/\s*([\d,]+)만원?/);
+  if(m1){
+    deposit=parseInt(m1[1].replace(/,/g,''))*10000;
+    if(m1[2])monthly=parseInt(m1[2].replace(/,/g,''));
+  } else if(m2){
+    deposit=parseInt(m2[1].replace(/,/g,''));
+    if(m2[2])monthly=parseInt(m2[2].replace(/,/g,''));
+  }
+  if(deal==='전세'){price=deposit;deposit=deposit;monthly=0;}
+  if(deal==='매매'){price=deposit;deposit=0;monthly=0;}
+  return{deal,price,deposit,monthly};
+}
+
+// ── 파서별 처리 ──
+function parseNaver(r,i,mx){
+  const rawType=gc(r,['종류','매물유형','유형','type','건축물용도']);
+  const rawName=gc(r,['매물명','name','단지명'])||rawType||`매물${i+1}`;
+  const sido=String(gc(r,['소재지'])||'');
+  const addrRaw=extractAddr(gc(r,['주소','address'])||'');
+  const fullAddr=sido&&addrRaw?(sido+' '+addrRaw).trim():addrRaw||sido;
+  const deal=nD(gc(r,['거래방식','거래유형','거래','deal']));
+  const type=nT(rawType);
+  const bathN=gc(r,['방수','방']);
+  const room=roomFromN(bathN);
+  const floorRaw=gc(r,['지상층/지하층','해당층','floor','층']);
+  const totalRaw=gc(r,['전체층','totalFloor','총층']);
+  const fp=parseFloor(floorRaw);
+  const floor=fp.floor, totalFloor=totalRaw?parseInt(totalRaw)||fp.total:fp.total;
+  const area=parseAreaStr(gc(r,['전용/연','전용면적','면적(㎡)','면적','area']));
+  const price=normPrice(gc(r,['매매대금','가격(만원)','가격','매매가','price']));
+  const deposit=normPrice(gc(r,['전세금','보증금(만원)','보증금','deposit']));
+  const monthly=normPrice(gc(r,['월세','월세(만원)','임대료','monthly']));
+  const mgt=parseMgt(gc(r,['관리비(만원)','관리비','mgt']));
+  const latLngRaw=gc(r,['위도/경도','위도경도']);
+  let lat=null,lng=null;
+  if(latLngRaw){const p=parseLatLng(latLngRaw);lat=p.lat;lng=p.lng;}
+  const desc=String(gc(r,['간략설명','설명','description','desc','비고'])||'').substring(0,300);
+  const dir=String(gc(r,['방향','direction','dir'])||'');
+  const moveRaw=String(gc(r,['입주가능일','즉시입주','move'])||'');
+  const move=moveRaw.includes('즉시')||moveRaw.includes('가능');
+  const semi=(floor<0)||String(gc(r,['반지하여부','반지하'])||'').includes('반지하');
+  const parking=pb(gc(r,['주차','parking']))||detectParking(desc);
+  const elev=pb(gc(r,['엘리베이터','elev']))||desc.includes('엘리베이터');
+  const bath=parseInt(gc(r,['화장실수','욕실수','욕실','bath'])||1)||1;
+  const contact=String(gc(r,['중개사휴대폰','중개사전화','연락처','contact','phone'])||'');
+  const sourceUrl=extractHyperlink(gc(r,['매물번호','URL','링크','url'])||'');
+  return{id:mx,agentId:CU.id,name:rawName,deal,type,room,price,deposit,monthly,mgt,area,floor,totalFloor,bath,semi,address:fullAddr,lat,lng,dir,parking,elev,move,desc,moveDate:move?'즉시입주':moveRaw,img:'',contact,sourceUrl};
+}
+
+function parseDaangn(r,i,mx){
+  const title=String(gc(r,['제목','title'])||'');
+  const monthlyText=String(gc(r,['월세_텍스트','가격'])||'');
+  const {deal,price,deposit,monthly}=parseDaangnPrice(title,monthlyText);
+  // 매물유형 (TWO_ROOM → 투룸)
+  const typeRaw=String(gc(r,['매물유형','건축물 용도','건축물용도'])||'');
+  const type=nT(typeRaw);
+  const roomTypeRaw=String(gc(r,['매물유형'])||'');
+  const room=nR(roomTypeRaw)||roomFromN(parseRoomN(gc(r,['방/욕실 수','방욕실수'])));
+  // 층수 "2층 / 3층"
+  const fp=parseFloor(gc(r,['층','floor']));
+  // 면적 "45㎡ · 13.6평"
+  const area=parseAreaStr(gc(r,['전용면적','공급면적','면적']));
+  const mgt=parseMgt(gc(r,['관리비']));
+  const bath=parseBath(gc(r,['방/욕실 수','방욕실수']));
+  const addr=String(gc(r,['주소','address'])||'');
+  const dir=String(gc(r,['방향'])||'').replace(/\(.*?\)/g,'').trim();
+  const moveRaw=String(gc(r,['입주 가능일','입주가능일'])||'');
+  const move=moveRaw.includes('즉시')||moveRaw.includes('가능');
+  const parking=String(gc(r,['총 주차 대수','주차'])||'').includes('가능')||String(gc(r,['총 주차 대수','주차'])||'').match(/\d+/)!=null&&!String(gc(r,['총 주차 대수'])||'').includes('불가');
+  const elevRaw=String(gc(r,['엘리베이터'])||'');
+  const elev=elevRaw&&!elevRaw.includes('없')&&!elevRaw.includes('불가');
+  const desc=String(gc(r,['상세_내용','설명','desc'])||'').substring(0,300);
+  const sourceUrl=String(gc(r,['매물_URL','URL','url'])||'');
+  // 아파트명 있으면 이름으로
+  const aptName=String(gc(r,['아파트명'])||'');
+  const name=aptName&&aptName!=='None'?aptName:(title.split('-')[0]?.trim()||`매물${i+1}`);
+  const semi=fp.floor<0;
+  return{id:mx,agentId:CU.id,name,deal,type,room,price,deposit,monthly,mgt,area,floor:fp.floor,totalFloor:fp.total,bath,semi,address:addr,lat:null,lng:null,dir,parking,elev,move,desc,moveDate:move?'즉시입주':moveRaw,img:'',contact:'',sourceUrl};
+}
+
+function parseGeneric(r,i,mx){
+  const rawType=gc(r,['종류','매물유형','유형','type']);
+  const rawName=gc(r,['매물명','name','단지명','제목','title'])||rawType||`매물${i+1}`;
+  const addr=extractAddr(gc(r,['주소','address','소재지'])||'');
+  const deal=nD(gc(r,['거래방식','거래유형','거래','deal','월세_텍스트']));
+  const type=nT(rawType);
+  const roomRaw=gc(r,['룸타입','방구조','room','구조','매물유형']);
+  const bathN=gc(r,['방수','방','방/욕실 수']);
+  const room=roomRaw?nR(roomRaw):roomFromN(bathN?parseRoomN(bathN):1);
+  const fp=parseFloor(gc(r,['층','floor','해당층','지상층/지하층']));
+  const totalRaw=gc(r,['총층','전체층','totalFloor']);
+  const area=parseAreaStr(gc(r,['전용면적','면적(㎡)','면적','전용/연','공급면적']));
+  const price=normPrice(gc(r,['매매대금','가격(만원)','가격','매매가','price']));
+  const deposit=normPrice(gc(r,['전세금','보증금(만원)','보증금','deposit']));
+  const monthly=normPrice(gc(r,['월세','월세(만원)','임대료','monthly']));
+  const mgt=parseMgt(gc(r,['관리비(만원)','관리비','mgt']));
+  const latLngRaw=gc(r,['위도/경도','위도경도']);
+  let lat=null,lng=null;
+  if(latLngRaw){const p=parseLatLng(latLngRaw);lat=p.lat;lng=p.lng;}
+  else{const la=gc(r,['위도','lat']);const lo=gc(r,['경도','lng','lon']);if(la)lat=parseFloat(la);if(lo)lng=parseFloat(lo);}
+  const desc=String(gc(r,['설명','간략설명','상세_내용','description','desc','비고'])||'').substring(0,300);
+  const dir=String(gc(r,['방향','direction','dir'])||'').replace(/\(.*?\)/g,'').trim();
+  const moveRaw=String(gc(r,['입주가능일','입주 가능일','즉시입주','move'])||'');
+  const move=moveRaw.includes('즉시')||moveRaw.includes('가능');
+  const semi=fp.floor<0||String(gc(r,['반지하여부','반지하'])||'').includes('반지하');
+  const parking=pb(gc(r,['주차','parking']))||detectParking(desc);
+  const elev=pb(gc(r,['엘리베이터','elev']))||desc.includes('엘리베이터');
+  const bath=parseBath(gc(r,['화장실수','욕실수','욕실','bath','방/욕실 수']))||1;
+  const img=String(gc(r,['사진URL','img','사진','이미지'])||'');
+  const contact=String(gc(r,['중개사휴대폰','중개사전화','연락처','contact','phone'])||'');
+  const sourceUrl=String(gc(r,['매물_URL','URL','url','링크'])||'');
+  return{id:mx,agentId:CU.id,name:rawName,deal,type,room,price,deposit,monthly,mgt,area,floor:fp.floor,totalFloor:totalRaw?parseInt(totalRaw)||fp.total:fp.total,bath,semi,address:addr,lat,lng,dir,parking,elev,move,desc,moveDate:move?'즉시입주':moveRaw,img,contact,sourceUrl};
+}
+
+function handleDrop(e){e.preventDefault();e.currentTarget?.classList?.remove('drag');const f=e.dataTransfer.files[0];if(f)procFile(f);}
 function handleFile(e){procFile(e.target.files[0]);}
-function procFile(file){const r=new FileReader();r.onload=e=>{try{const wb=XLSX.read(e.target.result,{type:'array'});const rows=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''});impP(rows,file.name);}catch(err){toast('❌ 파일 오류: '+err.message);}};r.readAsArrayBuffer(file);}
-function impP(rows,fname){
+function procFile(file){
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{defval:'',raw:false});
+      // 헤더로 양식 감지
+      const headers=XLSX.utils.sheet_to_json(ws,{header:1})[0]||[];
+      const fmt=detectFormat(headers);
+      impP(rows,file.name,fmt);
+    }catch(err){toast('❌ 파일 오류: '+err.message);}
+  };
+  r.readAsArrayBuffer(file);
+}
+
+function impP(rows,fname,fmt='generic'){
   let mx=getStore(SK.props).reduce((m,p)=>Math.max(m,p.id),0);
+  const fmtLabel={naver:'네이버부동산',daangn:'당근마켓',generic:'일반'}[fmt]||'일반';
   const np=rows.map((r,i)=>{
-    const nm=String(fc(r,COLS.name)||`매물${i+1}`);
-    const addr=String(fc(r,COLS.address)||'');
-    if(!nm&&!addr) return null;
-    return{id:++mx,agentId:CU.id,name:nm,deal:nD(String(fc(r,COLS.deal)||'')),type:nT(String(fc(r,COLS.type)||'')),room:nR(String(fc(r,COLS.room)||'')),price:pn(fc(r,COLS.price)),deposit:pn(fc(r,COLS.deposit)),monthly:pn(fc(r,COLS.monthly)),mgt:pn(fc(r,COLS.mgt)),area:pn(fc(r,COLS.area))||0,floor:pn(fc(r,COLS.floor))||1,totalFloor:pn(fc(r,COLS.totalFloor))||1,bath:pn(fc(r,COLS.bath))||1,semi:pb(fc(r,COLS.semi)),address:addr,lat:parseFloat(fc(r,COLS.lat))||null,lng:parseFloat(fc(r,COLS.lng))||null,dir:String(fc(r,COLS.dir)||''),parking:pb(fc(r,COLS.parking)),elev:pb(fc(r,COLS.elev)),move:pb(fc(r,COLS.move)),moveDate:String(fc(r,COLS.moveDate)||''),desc:String(fc(r,COLS.desc)||''),img:String(fc(r,COLS.img)||'')};
-  }).filter(Boolean);
+    try{
+      ++mx;
+      if(fmt==='naver')return parseNaver(r,i,mx);
+      if(fmt==='daangn')return parseDaangn(r,i,mx);
+      return parseGeneric(r,i,mx);
+    }catch(e){return null;}
+  }).filter(p=>p&&(p.address||p.name!==`매물${rows.indexOf(p)}`));
+
   if(!np.length){toast('❌ 유효 데이터 없음');return;}
-  const mode=confirm(`${np.length}개 매물\n[확인] 기존에 추가\n[취소] 내 매물 전체교체`)?'add':'replace';
+  const mode=confirm(`[${fmtLabel}] ${np.length}개 매물 발견!\n\n[확인] 기존에 추가\n[취소] 내 매물 전체교체`)?'add':'replace';
   let props=getStore(SK.props);
-  if(mode==='replace') props=props.filter(p=>p.agentId!==CU.id);
+  if(mode==='replace')props=props.filter(p=>p.agentId!==CU.id);
   props=[...props,...np];
   setStore(SK.props,props);
-  const r2=document.getElementById('upRes');r2.className='upres show';r2.textContent=`✅ ${np.length}개 업로드 (${fname})`;
-  renderAgentView();applyF();toast(`✅ ${np.length}개 업로드`);
+  const withCoords=np.filter(p=>p.lat&&p.lng).length;
+  const withLink=np.filter(p=>p.sourceUrl).length;
+  const r2=document.getElementById('upRes');
+  r2.className='upres show';
+  r2.innerHTML=`✅ <strong>${np.length}개</strong> 업로드 완료 (${fmtLabel} · ${fname})<br>📍 지도핀 ${withCoords}개 &nbsp; 🔗 원본링크 ${withLink}개`;
+  renderAgentView();applyF();
+  toast(`✅ [${fmtLabel}] ${np.length}개 업로드!`);
 }
-function nD(s){if(s.includes('매매'))return'매매';if(s.includes('전세'))return'전세';if(s.includes('단기'))return'단기임대';if(s.includes('월세')||s.includes('임대'))return'월세';return s||'월세';}
-function nT(s){if(s.includes('아파트'))return'아파트';if(s.includes('오피스텔'))return'오피스텔';if(s.includes('빌라')||s.includes('단독')||s.includes('다세대'))return'단독/빌라';if(s.includes('상가')||s.includes('사무'))return'상가/사무실';return s||'기타';}
-function nR(s){if(s.includes('포룸')||s.includes('4룸'))return'포룸+';if(s.includes('쓰리룸')||s.includes('3룸'))return'쓰리룸';if(s.includes('투룸')||s.includes('2룸'))return'투룸';if(s.includes('원룸')||s.includes('1룸'))return'원룸';return s||'원룸';}
-function dlTpl(){const h=['매물명','거래유형','매물유형','룸타입','가격(만원)','보증금(만원)','월세(만원)','관리비(만원)','면적(㎡)','층','총층','반지하여부','욕실수','주소','위도','경도','방향','주차','엘리베이터','즉시입주','설명','사진URL'];const s=['반포자이 101동 1201호','매매','아파트','포룸+',150000,'','',15,84.9,12,25,'N',2,'서울 서초구 반포동',37.5082,127.0135,'남향','가능','있음','가능','리모델링 완료','https://example.com/img1.jpg,https://example.com/img2.jpg'];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet([h,s]),'매물목록');XLSX.writeFile(wb,'매물장_템플릿.xlsx');}
 
-// ━━━ UTILS ━━━
+function dlTpl(){
+  const h=['매물명','거래유형','매물유형','룸타입','가격(만원)','보증금(만원)','월세(만원)','관리비(만원)','면적(㎡)','층','총층','반지하여부','욕실수','주소','위도','경도','방향','주차','엘리베이터','즉시입주','설명','입주가능일','사진URL'];
+  const s=['반포자이 101동 1201호','매매','아파트','포룸+',150000,'','',15,84.9,12,25,'N',2,'서울 서초구 반포동 1-1',37.5082,127.0135,'남향','가능','있음','가능','리모델링 완료','','https://example.com/img1.jpg'];
+  const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet([h,s]),'매물목록');XLSX.writeFile(wb2,'매물장_템플릿.xlsx');
+}
+  if(!v)return'';const s=String(v);
+  const m=s.match(/HYPERLINK\s*\([^,]+,\s*"([^"]+)"\)/i);
+  return m?m[1]:s;
+}
+function parseArea(v){
+  if(!v)return 0;const s=String(v).trim();
+  const parts=s.split('/');
+  if(parts.length>=2){const n=parseFloat(parts[1]);if(!isNaN(n))return n;}
+  const n=parseFloat(s);return isNaN(n)?0:n;
+}
 function fmtP(p){const v=p.deal==='전세'?p.deposit||p.price:p.deal==='월세'||p.deal==='단기임대'?p.deposit:p.price;if(v>=10000){const b=Math.floor(v/10000);const m=v%10000;return b+'억'+(m>0?' '+n(m)+'만':'');}return n(v)+'만';}
 function fmtPF(p){if(p.deal==='월세'||p.deal==='단기임대')return`보증 ${n(p.deposit)}만 / 월 ${n(p.monthly)}만`;const v=p.deal==='전세'?p.deposit||p.price:p.price;if(v>=10000){const b=Math.floor(v/10000);const m=v%10000;return b+'억'+(m>0?' '+n(m)+'만':'');}return n(v)+'만원';}
 function n(v){return(v||0).toLocaleString('ko-KR');}
