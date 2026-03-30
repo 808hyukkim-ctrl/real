@@ -539,14 +539,14 @@ img{display:block;max-width:100%}
         <div class="trow"><span>엘리베이터</span><label class="tgl"><input type="checkbox" id="c엘리" onchange="applyF()"><div class="tgl-tr"><div class="tgl-th"></div></div></label></div>
         <div class="trow"><span>주차 가능</span><label class="tgl"><input type="checkbox" id="c주차" onchange="applyF()"><div class="tgl-tr"><div class="tgl-th"></div></div></label></div>
       </div>
-      <div class="pcf-foot"><button class="btn-ap" onclick="applyF()">🔍 필터 적용</button></div>
+      <div class="pcf-foot"><button class="btn-ap" onclick="applyF();if(filtered.length)openRp(filtered,'검색결과 '+filtered.length+'개')">🔍 필터 적용</button></div>
     </div>
 
     <!-- MAP -->
     <div class="map-wrap" id="mapWrap">
       <div id="kakaoMap"></div>
       <div class="map-ph" id="mapPh"><div class="map-ph-ic">🗺</div><div style="font-size:15px;font-weight:700">카카오맵 API 키 필요</div><div style="font-size:12px;opacity:.7;margin-top:4px;text-align:center">YOUR_KAKAO_APP_KEY 교체</div></div>
-      <div class="map-pill"><b id="mapCnt">0</b>개 매물</div>
+      <div class="map-pill" onclick="openRp(filtered,'전체 매물 '+filtered.length+'개')" style="cursor:pointer">🔍 <b id="mapCnt">0</b>개 매물 보기</div>
       <button class="mob-flt-btn" onclick="openSb()">🔍 필터 · 조건</button>
       <div class="rp" id="rp">
         <div class="rp-hd">
@@ -900,6 +900,7 @@ function doLogin(){
   const users=getStore(SK.users);
   const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
   if(!u){toast('❌ 아이디 또는 비밀번호 오류');return;}
+  // 세션에 id만 저장 (pw는 보안상 저장 안 함)
   localStorage.setItem('mj_session',JSON.stringify({id:u.id,pw:u.pw}));
   loginWithUser(u);
 }
@@ -919,16 +920,19 @@ function loginWithUser(u){
   initMap();
 }
 // 페이지 로드 시 자동 로그인
-(function autoLogin(){
-  const sess=localStorage.getItem('mj_session');
-  if(!sess) return;
-  try{
-    const {id,pw}=JSON.parse(sess);
-    const users=getStore(SK.users);
-    const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
-    if(u) loginWithUser(u);
-  }catch(e){localStorage.removeItem('mj_session');}
-})();
+// 카카오 없을때만 즉시 자동로그인 (카카오 있으면 kakao.maps.load 콜백에서 처리)
+if(!window.kakao){
+  (function autoLogin(){
+    const sess=localStorage.getItem('mj_session');
+    if(!sess) return;
+    try{
+      const {id,pw}=JSON.parse(sess);
+      const users=getStore(SK.users);
+      const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
+      if(u) loginWithUser(u);
+    }catch(e){localStorage.removeItem('mj_session');}
+  })();
+}
 function doReg(){
   const id=document.getElementById('rid').value.trim();
   const pw=document.getElementById('rpw').value.trim();
@@ -1135,7 +1139,8 @@ function applyMobF(){
     bath:gV('mfbath'),
     c반지하:gC('mc반지하'),c즉시:gC('mc즉시'),c남:gC('mc남향'),c엘:gC('mc엘리'),c주:gC('mc주차'),
   });
-  closeSb();toast(`🔍 ${filtered.length}개 매물 검색됨`);
+  closeSb();
+  openRp(filtered,`검색결과 ${filtered.length}개`);
 }
 function _filter(f){
   filtered=visibleProps().filter(p=>{
@@ -1826,14 +1831,19 @@ function saveAgentProfile(){
   toast('✅ 프로필 저장됨');
 }
 function addMyClient(){
-  const id=document.getElementById('ncId').value.trim(),nm=document.getElementById('ncNm').value.trim(),ph=document.getElementById('ncPh').value.trim();
+  const id=document.getElementById('ncId').value.trim();
+  const nm=document.getElementById('ncNm').value.trim();
+  const ph=document.getElementById('ncPh').value.trim();
   if(!id||!nm){toast('❌ 아이디, 이름 필수');return;}
   const users=getStore(SK.users);
-  if(users.find(u=>u.id===id)){toast('❌ 중복 아이디');return;}
-  users.push({id,pw:id+'1234',name:nm,phone:ph,role:'client',active:true,agentId:CU.id});
+  if(users.find(u=>u.id===id)){toast('❌ 이미 존재하는 아이디');return;}
+  const pw=id+'88';
+  users.push({id,pw,name:nm,phone:ph,role:'client',active:true,agentId:CU.id});
   setStore(SK.users,users);
   ['ncId','ncNm','ncPh'].forEach(i=>document.getElementById(i).value='');
-  renderAgentView();toast(`✅ ${nm} 추가 (초기PW: ${id}1234)`);
+  renderAgentView();
+  // 명확하게 알려주기
+  alert(`✅ ${nm} 손님 추가 완료!\n\n아이디: ${id}\n비밀번호: ${pw}\n\n손님에게 전달해주세요!`);
 }
 function togMyClient(id){const users=getStore(SK.users);const u=users.find(x=>x.id===id);if(u){u.active=!u.active;setStore(SK.users,users);renderAgentView();}}
 function delMyClient(id){if(!confirm('삭제?'))return;const users=getStore(SK.users).filter(u=>u.id!==id);setStore(SK.users,users);renderAgentView();}
@@ -1881,14 +1891,18 @@ function renderSuperView(){
   document.getElementById('superStatDetail').innerHTML=agents.map(a=>`<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr)"><span>${a.displayName||a.name}</span><span style="color:var(--blue);font-weight:700">매물 ${allProps.filter(p=>p.agentId===a.id).length}개 · 손님 ${clients.filter(c=>c.agentId===a.id).length}명</span></div>`).join('');
 }
 function addAgent(){
-  const id=document.getElementById('naId').value.trim(),nm=document.getElementById('naNm').value.trim(),ph=document.getElementById('naPh').value.trim();
+  const id=document.getElementById('naId').value.trim();
+  const nm=document.getElementById('naNm').value.trim();
+  const ph=document.getElementById('naPh').value.trim();
   if(!id||!nm){toast('❌ 아이디, 이름 필수');return;}
   const users=getStore(SK.users);
-  if(users.find(u=>u.id===id)){toast('❌ 중복 아이디');return;}
-  users.push({id,pw:id+'1234',name:nm,displayName:nm,phone:ph,role:'agent',active:true,agentId:null,kakao:''});
+  if(users.find(u=>u.id===id)){toast('❌ 이미 존재하는 아이디');return;}
+  const pw=id+'88';
+  users.push({id,pw,name:nm,displayName:nm,phone:ph,role:'agent',active:true,agentId:null,kakao:''});
   setStore(SK.users,users);
   ['naId','naNm','naPh'].forEach(i=>document.getElementById(i).value='');
-  renderSuperView();toast(`✅ 담당자 ${nm} 추가 (초기PW: ${id}1234)`);
+  renderSuperView();
+  alert(`✅ 담당자 ${nm} 추가 완료!\n\n아이디: ${id}\n비밀번호: ${pw}\n\n담당자에게 전달해주세요!`);
 }
 function togAgent(id){const users=getStore(SK.users);const u=users.find(x=>x.id===id);if(u){u.active=!u.active;setStore(SK.users,users);renderSuperView();}}
 function delAgent(id){if(!confirm('담당자 삭제? (해당 담당자 매물/손님은 유지됩니다)'))return;const users=getStore(SK.users).filter(u=>u.id!==id);setStore(SK.users,users);renderSuperView();}
@@ -2190,11 +2204,20 @@ if(window.kakao&&kakao.maps){
   kakao.maps.load(function(){
     window._kakaoReady=true;
     console.log('Kakao OK');
+    const sess=localStorage.getItem('mj_session');
+    if(sess){
+      try{
+        const {id,pw}=JSON.parse(sess);
+        const users=getStore(SK.users);
+        const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
+        if(u&&!window.CU){loginWithUser(u);return;}
+      }catch(e){localStorage.removeItem('mj_session');}
+    }
     if(window.CU) initMap();
   });
 }else{
   window.kakao=null;
-  window._kakaoReady=true; // API 없어도 무한대기 방지
+  window._kakaoReady=true;
 }
 </script>
 </body>
