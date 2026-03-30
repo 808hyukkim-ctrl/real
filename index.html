@@ -2150,6 +2150,7 @@ function dlTpl(){
   const s=['반포자이 101동 1201호','매매','아파트','포룸+',150000,'','',15,84.9,12,25,'N',2,'서울 서초구 반포동 1-1',37.5082,127.0135,'남향','가능','있음','가능','리모델링 완료','','https://example.com/img1.jpg'];
   const wb2=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb2,XLSX.utils.aoa_to_sheet([h,s]),'매물목록');XLSX.writeFile(wb2,'매물장_템플릿.xlsx');
 }
+function extractHyperlink(v){
   if(!v)return'';const s=String(v);
   const m=s.match(/HYPERLINK\s*\([^,]+,\s*"([^"]+)"\)/i);
   return m?m[1]:s;
