@@ -6,6 +6,21 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>매물장</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey:"AIzaSyBGViE0LFrE4eBvNoZHi8NMWFvPgpPgjKg",
+  authDomain:"real-33f1c.firebaseapp.com",
+  databaseURL:"https://real-33f1c-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId:"real-33f1c",
+  storageBucket:"real-33f1c.firebasestorage.app",
+  messagingSenderId:"375423725179",
+  appId:"1:375423725179:web:b982331ac0e6f6855a3cde"
+});
+const db=firebase.database();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -856,8 +871,53 @@ const SK={
   pending:'mj4_pend',
 };
 
-function getStore(k){try{return JSON.parse(localStorage.getItem(k)||'null')||[]}catch{return[]}}
-function setStore(k,v){localStorage.setItem(k,JSON.stringify(v))}
+// ── Firebase DB 래퍼 (동기처럼 쓰기 위해 캐시 사용) ──
+const _cache={};
+let _dbReady=false;
+
+// 초기 데이터 전체 로드
+function loadAllFromDB(cb){
+  db.ref('/').once('value').then(snap=>{
+    const data=snap.val()||{};
+    Object.keys(SK).forEach(k=>{
+      const key=SK[k];
+      _cache[key]=data[key]?Object.values(data[key]):[];
+    });
+    _dbReady=true;
+    cb&&cb();
+  }).catch(e=>{
+    console.warn('DB 로드 실패, localStorage 사용',e);
+    Object.keys(SK).forEach(k=>{
+      const key=SK[k];
+      try{_cache[key]=JSON.parse(localStorage.getItem(key)||'[]');}catch{_cache[key]=[];}
+    });
+    _dbReady=true;
+    cb&&cb();
+  });
+}
+
+function getStore(k){return _cache[k]||[];}
+function setStore(k,v){
+  _cache[k]=v;
+  // Firebase에 저장
+  const obj={};
+  v.forEach((item,i)=>{obj[i]=item;});
+  db.ref('/'+k).set(obj).catch(e=>{
+    // fallback to localStorage
+    localStorage.setItem(k,JSON.stringify(v));
+  });
+}
+
+// DB 실시간 동기화 (다른 기기 변경사항 반영)
+function startDBSync(){
+  Object.keys(SK).forEach(k=>{
+    const key=SK[k];
+    db.ref('/'+key).on('value',snap=>{
+      const data=snap.val();
+      _cache[key]=data?Object.values(data):[];
+    });
+  });
+}
 
 // ── DEFAULT DATA ──
 function initDefaults(){
@@ -920,19 +980,23 @@ function loginWithUser(u){
   initMap();
 }
 // 페이지 로드 시 자동 로그인
-// 카카오 없을때만 즉시 자동로그인 (카카오 있으면 kakao.maps.load 콜백에서 처리)
-if(!window.kakao){
-  (function autoLogin(){
+// ── 앱 시작: DB 로드 후 초기화 ──
+loadAllFromDB(function(){
+  initDefaults();
+  startDBSync();
+  // 카카오 없을때만 즉시 자동로그인
+  if(!window.kakao){
     const sess=localStorage.getItem('mj_session');
-    if(!sess) return;
-    try{
-      const {id,pw}=JSON.parse(sess);
-      const users=getStore(SK.users);
-      const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
-      if(u) loginWithUser(u);
-    }catch(e){localStorage.removeItem('mj_session');}
-  })();
-}
+    if(sess){
+      try{
+        const {id,pw}=JSON.parse(sess);
+        const users=getStore(SK.users);
+        const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
+        if(u) loginWithUser(u);
+      }catch(e){localStorage.removeItem('mj_session');}
+    }
+  }
+});
 function doReg(){
   const id=document.getElementById('rid').value.trim();
   const pw=document.getElementById('rpw').value.trim();
@@ -2204,16 +2268,21 @@ if(window.kakao&&kakao.maps){
   kakao.maps.load(function(){
     window._kakaoReady=true;
     console.log('Kakao OK');
-    const sess=localStorage.getItem('mj_session');
-    if(sess){
-      try{
-        const {id,pw}=JSON.parse(sess);
-        const users=getStore(SK.users);
-        const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
-        if(u&&!window.CU){loginWithUser(u);return;}
-      }catch(e){localStorage.removeItem('mj_session');}
+    // DB 로드 완료 후 자동로그인
+    function tryAutoLogin(){
+      const sess=localStorage.getItem('mj_session');
+      if(sess){
+        try{
+          const {id,pw}=JSON.parse(sess);
+          const users=getStore(SK.users);
+          const u=users.find(x=>x.id===id&&x.pw===pw&&x.active);
+          if(u&&!window.CU){loginWithUser(u);return;}
+        }catch(e){localStorage.removeItem('mj_session');}
+      }
+      if(window.CU) initMap();
     }
-    if(window.CU) initMap();
+    if(_dbReady) tryAutoLogin();
+    else loadAllFromDB(()=>{initDefaults();startDBSync();tryAutoLogin();});
   });
 }else{
   window.kakao=null;
