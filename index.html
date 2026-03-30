@@ -899,25 +899,29 @@ function loadAllFromDB(cb){
 function getStore(k){return _cache[k]||[];}
 function setStore(k,v){
   _cache[k]=v;
-  // Firebase에 저장
   const obj={};
-  v.forEach((item,i)=>{obj[i]=item;});
+  v.forEach(item=>{
+    // id 있으면 id를 키로, 없으면 인덱스 사용
+    const key=item.id!==undefined?'id_'+item.id:('k_'+Date.now()+'_'+Math.random().toString(36).slice(2));
+    obj[key]=item;
+  });
   db.ref('/'+k).set(obj).catch(e=>{
-    // fallback to localStorage
     localStorage.setItem(k,JSON.stringify(v));
   });
 }
 
-// DB 실시간 동기화 (다른 기기 변경사항 반영)
+// DB 실시간 동기화
 function startDBSync(){
   Object.keys(SK).forEach(k=>{
     const key=SK[k];
     db.ref('/'+key).on('value',snap=>{
       const data=snap.val();
       _cache[key]=data?Object.values(data):[];
-      // 매물 데이터 변경 시 지도/필터 갱신
-      if(key===SK.props && window.CU){
-        applyF();
+      if(key===SK.props&&window.CU) applyF();
+      if(key===SK.users&&window.CU){
+        // 사용자 정보 갱신
+        const updated=getStore(SK.users).find(u=>u.id===CU.id);
+        if(updated) CU=updated;
       }
     });
   });
@@ -1344,11 +1348,17 @@ function openDetail(id){
   if(p.move)tags.push('✅ 즉시입주');
   document.getElementById('mTags').innerHTML=tags.map(t=>`<span class="m-tag">${t}</span>`).join('');
   document.getElementById('mDesc').textContent=p.desc||'상세 정보 없음';
-  // 원본 링크 버튼
+  // 원본 링크 버튼 - 중개사/슈퍼만 보임, 손님에게 숨김
   const srcEl=document.getElementById('mSourceUrl');
   if(srcEl){
-    if(p.sourceUrl){srcEl.style.display='block';srcEl.onclick=()=>window.open(p.sourceUrl,'_blank');}
-    else srcEl.style.display='none';
+    const isAgent=(CU.role==='agent'||CU.role==='super');
+    if(p.sourceUrl&&isAgent){
+      srcEl.style.display='block';
+      srcEl.onclick=()=>window.open(p.sourceUrl,'_blank');
+      srcEl.textContent='🔗 원본 매물 링크 보기';
+    } else {
+      srcEl.style.display='none';
+    }
   }
   updMCartBtn();
   document.getElementById('mbg').classList.add('open');
@@ -1399,12 +1409,7 @@ function toggleCart(){document.getElementById('cp').classList.toggle('open');ren
 function renderCart(){
   const el=document.getElementById('cpBody');
   if(!cart.length){el.innerHTML=`<div class="cp-empty"><span class="cp-empty-ic">🛒</span><div style="font-size:15px;font-weight:700;color:var(--t2);margin-bottom:4px">장바구니가 비어있어요</div><div style="font-size:13px">마음에 드는 매물을 담아보세요</div></div>`;return;}
-  el.innerHTML=cart.map((p,i)=>`<div class="ci">
-    <div class="ci-top"><div><div style="display:flex;gap:5px;margin-bottom:5px"><span class="bdg ${p.deal==='전세'?'bdg-전세':p.deal==='월세'?'bdg-월세':p.deal==='단기임대'?'bdg-단기임대':'bdg-매매'}" style="font-size:10px">${p.deal}</span><span class="bdg bdg-t" style="font-size:10px">${p.type}</span></div><div class="ci-price">${fmtPF(p)}</div></div><button class="ci-del" onclick="cartTog(${p.id})">✕</button></div>
-    <div class="ci-name">${p.name}</div>
-    <div class="ci-addr">${p.address}</div>
-    <div class="ci-visit"><div class="ci-vl">🗓 방문 희망 일시</div><div class="ci-vr"><input type="date" value="${p.visitDate||''}" onchange="cart[${i}].visitDate=this.value"><input type="time" value="${p.visitTime||''}" onchange="cart[${i}].visitTime=this.value"></div></div>
-  </div>`).join('');
+  el.innerHTML=cart.map((p,i)=>renderCartItemHTML(p,i)).join('');
 }
 
 // ━━━ SEND CART ━━━
@@ -1412,17 +1417,36 @@ function buildCartMsg(){
   const users=getStore(SK.users);
   const agentId=CU.role==='client'?CU.agentId:CU.id;
   const agent=users.find(u=>u.id===agentId);
-  let msg=`[매물장] ${CU.name}님 관심 매물 ${cart.length}건\n`;
-  msg+=`─────────────────\n`;
+  const isAgent=(CU.role==='agent'||CU.role==='super');
+
+  // 손님용 메시지 (중개사에게 전달되는 것 - 링크 포함)
+  let agentMsg=`[매물장] ${CU.name}님 관심 매물 ${cart.length}건\n`;
+  agentMsg+=`─────────────────\n`;
   cart.forEach((p,i)=>{
-    msg+=`${i+1}. ${p.name}\n`;
-    msg+=`   ${fmtPF(p)} | ${p.type} ${p.area}㎡ ${p.floor}층\n`;
-    msg+=`   📍 ${p.address}\n`;
-    if(p.visitDate)msg+=`   🗓 방문희망: ${p.visitDate} ${p.visitTime||''}\n`;
-    msg+='\n';
+    agentMsg+=`${i+1}. ${p.name}\n`;
+    agentMsg+=`   ${fmtPF(p)} | ${p.type} ${p.area}㎡ ${p.floor}층\n`;
+    agentMsg+=`   📍 ${p.address}\n`;
+    if(p.visitDate)agentMsg+=`   🗓 방문희망: ${p.visitDate} ${p.visitTime||''}\n`;
+    if(p.sourceUrl)agentMsg+=`   🔗 ${p.sourceUrl}\n`;
+    agentMsg+='\n';
   });
-  msg+=`─────────────────\n연락처: ${CU.phone||'미등록'}`;
+  agentMsg+=`─────────────────\n손님연락처: ${CU.phone||'미등록'}`;
+
+  // 중개사가 직접 볼 때도 링크 포함
+  const msg = agentMsg;
   return{msg,phone:agent?.phone||''};
+}
+
+// 장바구니 카드 렌더링 - 손님에게는 링크 숨김
+function renderCartItemHTML(p,i){
+  const isAgent=(CU.role==='agent'||CU.role==='super');
+  return`<div class="ci">
+    <div class="ci-top"><div><div style="display:flex;gap:5px;margin-bottom:5px"><span class="bdg ${p.deal==='전세'?'bdg-전세':p.deal==='월세'?'bdg-월세':p.deal==='단기임대'?'bdg-단기임대':'bdg-매매'}" style="font-size:10px">${p.deal}</span><span class="bdg bdg-t" style="font-size:10px">${p.type}</span></div><div class="ci-price">${fmtPF(p)}</div></div><button class="ci-del" onclick="cartTog(${p.id})">✕</button></div>
+    <div class="ci-name">${p.name}</div>
+    <div class="ci-addr">${p.address}</div>
+    ${isAgent&&p.sourceUrl?`<div style="margin-bottom:8px"><a href="${p.sourceUrl}" target="_blank" style="font-size:11px;color:var(--blue);word-break:break-all">🔗 원본링크 보기</a></div>`:''}
+    <div class="ci-visit"><div class="ci-vl">🗓 방문 희망 일시</div><div class="ci-vr"><input type="date" value="${p.visitDate||''}" onchange="cart[${i}].visitDate=this.value"><input type="time" value="${p.visitTime||''}" onchange="cart[${i}].visitTime=this.value"></div></div>
+  </div>`;
 }
 function sendSMS(){
   if(!cart.length){toast('장바구니가 비어있어요');return;}
@@ -1698,11 +1722,11 @@ function submitManual(cid){
   const addr=g('addr')?.value.trim();
   if(!name||!addr){toast('❌ 매물명과 주소는 필수입니다');return;}
   const props=getStore(SK.props);
-  const mx=props.reduce((m,p)=>Math.max(m,p.id),0);
+  const mx=Date.now();
   const imgs=(_manualImgs[cid]||[]).join(',');
   const moveDate=g('moveDate')?.value||'';
   const newP={
-    id:mx+1, agentId:CU.id,
+    id:mx, agentId:CU.id,
     name, address:addr,
     deal:g('deal')?.value||'월세',
     type:g('type')?.value||'단독/빌라',
@@ -2218,16 +2242,16 @@ function procFile(file){
 }
 
 function impP(rows,fname,fmt='generic'){
-  let mx=getStore(SK.props).reduce((m,p)=>Math.max(m,p.id),0);
+  const baseTime=Date.now();
   const fmtLabel={naver:'네이버부동산',daangn:'당근마켓',generic:'일반'}[fmt]||'일반';
   const np=rows.map((r,i)=>{
     try{
-      ++mx;
+      const mx=baseTime+i;
       if(fmt==='naver')return parseNaver(r,i,mx);
       if(fmt==='daangn')return parseDaangn(r,i,mx);
       return parseGeneric(r,i,mx);
     }catch(e){return null;}
-  }).filter(p=>p&&(p.address||p.name!==`매물${rows.indexOf(p)}`));
+  }).filter(p=>p&&(p.address||p.name));
 
   if(!np.length){toast('❌ 유효 데이터 없음');return;}
   const mode=confirm(`[${fmtLabel}] ${np.length}개 매물 발견!\n\n[확인] 기존에 추가\n[취소] 내 매물 전체교체`)?'add':'replace';
