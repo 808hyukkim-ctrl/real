@@ -971,18 +971,20 @@ function sv(v){
 // ━━━ MAP ━━━
 function initMap(){
   const el=document.getElementById('kakaoMap');
-  // 카카오 아직 로드 중이면 대기
-  if(!window.kakao||!kakao.maps){
+  const ph=document.getElementById('mapPh');
+  if(!window.kakao||!kakao.maps||!window._kakaoReady){
+    // 카카오 아직 로드 중이면 재시도
     if(window._kakaoReady===false){
-      // 카카오 로드 완료 후 재시도
-      setTimeout(initMap, 300);
-      return;
+      setTimeout(initMap,300);return;
     }
     el.style.display='none';
-    document.getElementById('mapPh').style.display='flex';
+    if(ph)ph.style.display='flex';
     applyF();return;
   }
-  if(kmap) return; // 이미 초기화됨
+  if(kmap){applyF();return;}
+  // 지도 표시
+  el.style.display='block';
+  if(ph)ph.style.display='none';
   kmap=new kakao.maps.Map(el,{center:new kakao.maps.LatLng(37.51,127.035),level:9});
   kakao.maps.event.addListener(kmap,'zoom_changed',()=>renderMarkers());
   applyF();
@@ -2188,12 +2190,11 @@ if(window.kakao&&kakao.maps){
   kakao.maps.load(function(){
     window._kakaoReady=true;
     console.log('Kakao OK');
-    // 이미 로그인된 상태면 바로 지도 초기화
     if(window.CU) initMap();
   });
 }else{
   window.kakao=null;
-  window._kakaoReady=false;
+  window._kakaoReady=true; // API 없어도 무한대기 방지
 }
 </script>
 </body>
