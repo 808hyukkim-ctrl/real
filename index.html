@@ -971,7 +971,18 @@ function sv(v){
 // ━━━ MAP ━━━
 function initMap(){
   const el=document.getElementById('kakaoMap');
-  if(!window.kakao||!kakao.maps){el.style.display='none';document.getElementById('mapPh').style.display='flex';applyF();return;}
+  // 카카오 아직 로드 중이면 대기
+  if(!window.kakao||!kakao.maps){
+    if(window._kakaoReady===false){
+      // 카카오 로드 완료 후 재시도
+      setTimeout(initMap, 300);
+      return;
+    }
+    el.style.display='none';
+    document.getElementById('mapPh').style.display='flex';
+    applyF();return;
+  }
+  if(kmap) return; // 이미 초기화됨
   kmap=new kakao.maps.Map(el,{center:new kakao.maps.LatLng(37.51,127.035),level:9});
   kakao.maps.event.addListener(kmap,'zoom_changed',()=>renderMarkers());
   applyF();
@@ -2167,8 +2178,23 @@ function n(v){return(v||0).toLocaleString('ko-KR');}
 let _t;function toast(msg){const el=document.getElementById('toast');el.textContent=msg;el.classList.add('show');clearTimeout(_t);_t=setTimeout(()=>el.classList.remove('show'),2800);}
 </script>
 
-<!-- 카카오맵: YOUR_KAKAO_APP_KEY 교체 필요 -->
+<!-- 카카오맵 API -->
+<script>
+window._kakaoReady=false;
+</script>
 <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey=3f477cd57ab3612d58326d55ddd58dce&libraries=services&autoload=false"></script>
-<script>if(window.kakao&&kakao.maps){kakao.maps.load(()=>console.log('Kakao OK'));}else{window.kakao=null;}</script>
+<script>
+if(window.kakao&&kakao.maps){
+  kakao.maps.load(function(){
+    window._kakaoReady=true;
+    console.log('Kakao OK');
+    // 이미 로그인된 상태면 바로 지도 초기화
+    if(window.CU) initMap();
+  });
+}else{
+  window.kakao=null;
+  window._kakaoReady=false;
+}
+</script>
 </body>
 </html>
