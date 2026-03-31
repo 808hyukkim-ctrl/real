@@ -891,16 +891,16 @@ function loadAllFromDB(cb){
 }
 
 function getStore(k){return _cache[k]||[];}
-function setStore(k,v){
+function setStore(k,v,cb){
   _cache[k]=v;
   const obj={};
   v.forEach(item=>{
-    // id 있으면 id를 키로, 없으면 인덱스 사용
     const key=item.id!==undefined?'id_'+item.id:('k_'+Date.now()+'_'+Math.random().toString(36).slice(2));
     obj[key]=item;
   });
-  db.ref('/'+k).set(obj).catch(e=>{
+  db.ref('/'+k).set(obj).then(()=>{cb&&cb();}).catch(e=>{
     localStorage.setItem(k,JSON.stringify(v));
+    cb&&cb();
   });
 }
 
@@ -1783,13 +1783,13 @@ function submitManual(cid){
     moveDate, img:imgs,
   };
   props.push(newP);
-  setStore(SK.props,props);
-  toast(`✅ "${name}" 등록 완료!`);
-  renderManualForm(cid,null);
-  _manualImgs[cid]=[];
-  renderAgentView();applyF();
-  if(cid==='manualFormInner2'){document.getElementById('linkFormArea').style.display='none';document.getElementById('linkUrl').value='';}
-}
+  setStore(SK.props,props,()=>{
+    toast(`✅ "${name}" 등록 완료!`);
+    renderManualForm(cid,null);
+    _manualImgs[cid]=[];
+    renderAgentView();applyF();
+    if(cid==='manualFormInner2'){document.getElementById('linkFormArea').style.display='none';document.getElementById('linkUrl').value='';}
+  });
 // ━━━ AGENT ADMIN ━━━
 function renderAgentView(){
   const users=getStore(SK.users);
@@ -1941,10 +1941,11 @@ function saveEditProp(){
     semi:g('semi').checked,
     desc:g('desc').value.trim()||'',
   };
-  setStore(SK.props,props);
-  document.getElementById('editModalBg').classList.remove('open');
-  renderAgentView();applyF();
-  toast('✅ 매물 수정 완료!');
+  setStore(SK.props,props,()=>{
+    document.getElementById('editModalBg').classList.remove('open');
+    renderAgentView();applyF();
+    toast('✅ 매물 수정 완료!');
+  });
 }
 function saveAgentProfile(){
   const users=getStore(SK.users);
@@ -2158,36 +2159,59 @@ function parseDaangnPrice(title,monthlyText){
 function parseNaver(r,i,mx){
   const rawType=gc(r,['종류','매물유형','유형','type','건축물용도']);
   const rawName=gc(r,['매물명','name','단지명'])||rawType||`매물${i+1}`;
-  const sido=String(gc(r,['소재지'])||'');
+  const sido=String(gc(r,['소재지','시'])||'');
+  const gu=String(gc(r,['구'])||'');
+  const dong=String(gc(r,['동'])||'');
   const addrRaw=extractAddr(gc(r,['주소','address'])||'');
-  const fullAddr=sido&&addrRaw?(sido+' '+addrRaw).trim():addrRaw||sido;
+  // 주소 조합: 소재지 or 시+구+동+주소
+  let fullAddr='';
+  if(sido&&addrRaw) fullAddr=(sido+' '+addrRaw).trim();
+  else if(sido) fullAddr=sido+(gu?' '+gu:'')+(dong?' '+dong:'')+(addrRaw?' '+addrRaw:'');
+  else fullAddr=addrRaw;
+
   const deal=nD(gc(r,['거래방식','거래유형','거래','deal']));
   const type=nT(rawType);
   const bathN=gc(r,['방수','방']);
   const room=roomFromN(bathN);
-  const floorRaw=gc(r,['지상층/지하층','해당층','floor','층']);
+  const floorRaw=gc(r,['해당층','지상층/지하층','floor','층']);
   const totalRaw=gc(r,['전체층','totalFloor','총층']);
   const fp=parseFloor(floorRaw);
   const floor=fp.floor, totalFloor=totalRaw?parseInt(totalRaw)||fp.total:fp.total;
   const area=parseAreaStr(gc(r,['전용/연','전용면적','면적(㎡)','면적','area']));
-  const price=normPrice(gc(r,['매매대금','가격(만원)','가격','매매가','price']));
-  const deposit=normPrice(gc(r,['전세금','보증금(만원)','보증금','deposit']));
+
+  // 가격: 매매/전세금 컬럼 (콤마 포함 문자열)
+  const priceDeposit=normPrice(gc(r,['매매/전세금','매매대금','가격(만원)','가격','매매가','price']));
   const monthly=normPrice(gc(r,['월세','월세(만원)','임대료','monthly']));
+  let price=0,deposit=0;
+  if(deal==='매매') price=priceDeposit;
+  else if(deal==='전세') deposit=priceDeposit;
+  else if(deal==='월세'||deal==='단기임대') deposit=priceDeposit;
+
   const mgt=parseMgt(gc(r,['관리비(만원)','관리비','mgt']));
-  const latLngRaw=gc(r,['위도/경도','위도경도']);
+
+  // 위도/경도: "37.484928,127.056765" 형식
+  const latLngRaw=gc(r,['위도/경도','위도경도','위도,경도']);
   let lat=null,lng=null;
-  if(latLngRaw){const p=parseLatLng(latLngRaw);lat=p.lat;lng=p.lng;}
-  const desc=String(gc(r,['간략설명','설명','description','desc','비고'])||'').substring(0,300);
+  if(latLngRaw){const p=parseLatLng(String(latLngRaw));lat=p.lat;lng=p.lng;}
+
+  const desc=String(gc(r,['간략설명','설명','description','desc','비고'])||'').substring(0,500);
   const dir=String(gc(r,['방향','direction','dir'])||'');
   const moveRaw=String(gc(r,['입주가능일','즉시입주','move'])||'');
-  const move=moveRaw.includes('즉시')||moveRaw.includes('가능');
+  const move=moveRaw.includes('즉시')||moveRaw.includes('NOW')||moveRaw.includes('가능');
   const semi=(floor<0)||String(gc(r,['반지하여부','반지하'])||'').includes('반지하');
   const parking=pb(gc(r,['주차','parking']))||detectParking(desc);
   const elev=pb(gc(r,['엘리베이터','elev']))||desc.includes('엘리베이터');
   const bath=parseInt(gc(r,['화장실수','욕실수','욕실','bath'])||1)||1;
   const contact=String(gc(r,['중개사휴대폰','중개사전화','연락처','contact','phone'])||'');
+
+  // 매물번호 컬럼이 네이버 링크 URL인 경우
   const sourceUrl=extractHyperlink(gc(r,['매물번호','URL','링크','url'])||'');
-  return{id:mx,agentId:CU.id,name:rawName,deal,type,room,price,deposit,monthly,mgt,area,floor,totalFloor,bath,semi,address:fullAddr,lat,lng,dir,parking,elev,move,desc,moveDate:move?'즉시입주':moveRaw,img:'',contact,sourceUrl};
+
+  // 이미지URL 컬럼 (쉼표로 여러장 가능)
+  const imgRaw=String(gc(r,['이미지URL','사진URL','이미지','사진','img','image','photo'])||'');
+  const img=imgRaw.startsWith('http')?imgRaw:'';
+
+  return{id:mx,agentId:CU.id,name:rawName,deal,type,room,price,deposit,monthly,mgt,area,floor,totalFloor,bath,semi,address:fullAddr,lat,lng,dir,parking,elev,move,desc,moveDate:move?'즉시입주':moveRaw,img,contact,sourceUrl};
 }
 
 function parseDaangn(r,i,mx){
@@ -2290,14 +2314,17 @@ function impP(rows,fname,fmt='generic'){
   let props=getStore(SK.props);
   if(mode==='replace')props=props.filter(p=>p.agentId!==CU.id);
   props=[...props,...np];
-  setStore(SK.props,props);
   const withCoords=np.filter(p=>p.lat&&p.lng).length;
   const withLink=np.filter(p=>p.sourceUrl).length;
   const r2=document.getElementById('upRes');
   r2.className='upres show';
-  r2.innerHTML=`✅ <strong>${np.length}개</strong> 업로드 완료 (${fmtLabel} · ${fname})<br>📍 지도핀 ${withCoords}개 &nbsp; 🔗 원본링크 ${withLink}개`;
-  renderAgentView();applyF();
-  toast(`✅ [${fmtLabel}] ${np.length}개 업로드!`);
+  r2.innerHTML=`⏳ Firebase 저장 중...`;
+  setStore(SK.props,props,()=>{
+    r2.innerHTML=`✅ <strong>${np.length}개</strong> 업로드 완료 (${fmtLabel} · ${fname})<br>📍 지도핀 ${withCoords}개 &nbsp; 🔗 원본링크 ${withLink}개`;
+    renderAgentView();
+    applyF();
+    toast(`✅ [${fmtLabel}] ${np.length}개 업로드!`);
+  });
 }
 
 function dlTpl(){
